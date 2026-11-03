@@ -34,8 +34,13 @@ public class Exercise8Test extends ClassicOnlineStore {
         /**
          * Create a set of item names that are in {@link Customer.wantToBuy} but not on sale in any shop.
          */
-        List<String> itemListOnSale = null;
-        Set<String> itemSetNotOnSale = null;
+        List<String> itemListOnSale = shopStream.flatMap(shop -> shop.getItemList().stream())
+                .map(Item::getName)
+                .collect(Collectors.toList());
+        Set<String> itemSetNotOnSale = customerStream.flatMap(customer -> customer.getWantToBuy().stream())
+                .map(Item::getName)
+                .filter(item -> !itemListOnSale.contains(item))
+                .collect(Collectors.toSet());
 
         assertThat(itemSetNotOnSale, hasSize(3));
         assertThat(itemSetNotOnSale, hasItems("bag", "pants", "coat"));
@@ -53,7 +58,21 @@ public class Exercise8Test extends ClassicOnlineStore {
          * Items that are not on sale can be counted as 0 money cost.
          * If there is several same items with different prices, customer can choose the cheapest one.
          */
-        List<String> customerNameList = null;
+        List<Item> onSaleItems = shopStream.flatMap(shop -> shop.getItemList().stream()).collect(Collectors.toList());
+        Predicate<Customer> enoughMoney = customer -> {
+            int totalCost = customer.getWantToBuy().stream()
+                    .mapToInt(wantedItem -> onSaleItems.stream()
+                            .filter(shopItem -> shopItem.getName().equals(wantedItem.getName()))
+                            .mapToInt(Item::getPrice)
+                            .min()
+                            .orElse(0))
+                    .sum();
+            return customer.getBudget() >= totalCost;
+        };
+        List<String> customerNameList = customerStream
+                .filter(enoughMoney)
+                .map(Customer::getName)
+                .collect(Collectors.toList());
 
         assertThat(customerNameList, hasSize(7));
         assertThat(customerNameList, hasItems("Joe", "Patrick", "Chris", "Kathy", "Alice", "Andrew", "Amy"));

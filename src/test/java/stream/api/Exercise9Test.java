@@ -41,8 +41,11 @@ public class Exercise9Test extends ClassicOnlineStore {
          * Implement a {@link Collector} which can create a String with comma separated names shown in the assertion.
          * The collector will be used by serial stream.
          */
-        Supplier<Object> supplier = () -> new StringJoiner(",");
-        Collector<String, ?, String> toCsv = null;
+        Supplier<StringJoiner> supplier = () -> new StringJoiner(",");
+        BiConsumer<StringJoiner, String> accumulator = StringJoiner::add;
+        BinaryOperator<StringJoiner> combiner = StringJoiner::merge;
+        Function<StringJoiner, String> finisher = StringJoiner::toString;
+        Collector<String, ?, String> toCsv = new CollectorImpl<>(supplier, accumulator, combiner, finisher, Collections.emptySet());
         String nameAsCsv = customerList.stream().map(Customer::getName).collect(toCsv);
         assertThat(nameAsCsv, is("Joe,Steven,Patrick,Diana,Chris,Kathy,Alice,Andrew,Martin,Amy"));
     }
@@ -60,7 +63,24 @@ public class Exercise9Test extends ClassicOnlineStore {
 
 
 
-        Collector<Customer, ?, Map<String, Set<String>>> toItemAsKey = null;
+        Supplier<Map<String, Set<String>>> mapSupplier = HashMap::new;
+        BiConsumer<Map<String, Set<String>>, Customer> accumulator = (map, customer) -> {
+            customer.getWantToBuy().forEach(item ->
+                    map.computeIfAbsent(item.getName(), k -> new HashSet<>()).add(customer.getName())
+            );
+        };
+        BinaryOperator<Map<String, Set<String>>> combiner = (map1, map2) -> {
+            map2.forEach((item, customers) ->
+                    map1.computeIfAbsent(item, k -> new HashSet<>()).addAll(customers)
+            );
+            return map1;
+        };
+        Function<Map<String, Set<String>>, Map<String, Set<String>>> finisher = Function.identity();
+        Set<Collector.Characteristics> characteristics = Collections.emptySet();
+
+        Collector<Customer, ?, Map<String, Set<String>>> toItemAsKey = new CollectorImpl<>(
+                mapSupplier, accumulator, combiner, finisher, characteristics
+        );
         Map<String, Set<String>> itemMap =
                 customerList.stream().parallel().collect(toItemAsKey);
 
